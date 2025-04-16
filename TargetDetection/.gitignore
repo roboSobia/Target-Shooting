@@ -1220,8 +1220,8 @@ fabric.properties
 /test/testfile/dataset
 /zoo/testfile/dataset
 /.train
-*.pt
-/runs
+# *.pt
+# /runs
 /YOLOv8
 /datasets
 /.env*
