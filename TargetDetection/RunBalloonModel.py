@@ -27,7 +27,7 @@ def get_color_name(bgr):
         return f"rgb({int(r)}, {int(g)}, {int(b)})"
 
 # Load your trained YOLO model (assumed to detect balloons)
-model = YOLO('runs/detect/train/weights/best.pt')
+model = YOLO('TargetDetection\\runs\\detect\\train\\weights\\best.pt')
 
 # Open the default camera (0)
 cap = cv2.VideoCapture(0)
