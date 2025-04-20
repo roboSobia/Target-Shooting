@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import threading
 
 # Set prediction confidence threshold (adjust as needed)
 CONF_THRESHOLD = 0.7
@@ -27,14 +28,40 @@ def get_color_name(bgr):
         return f"rgb({int(r)}, {int(g)}, {int(b)})"
 
 # Load your trained YOLO model (assumed to detect balloons)
-model = YOLO('runs/detect/train/weights/best.pt')
+model = YOLO('Target-Shooting\TargetDetection\\runs\detect\\train\weights\\best.pt')
 
-# Open the default camera (0)
-cap = cv2.VideoCapture(0)
+class VideoStream:
+    def __init__(self, src):
+        self.cap = cv2.VideoCapture(src)
+        self.ret, self.frame = self.cap.read()
+        self.stopped = False
+        self.lock = threading.Lock()
+        self.thread = threading.Thread(target=self.update, daemon=True)
+        self.thread.start()
+
+    def update(self):
+        while not self.stopped:
+            ret, frame = self.cap.read()
+            with self.lock:
+                self.ret = ret
+                self.frame = frame
+
+    def read(self):
+        with self.lock:
+            return self.ret, self.frame.copy() if self.frame is not None else (False, None)
+
+    def release(self):
+        self.stopped = True
+        self.thread.join()
+        self.cap.release()
+
+# Open the IP camera stream using the threaded VideoStream
+ip_camera_url = 'http://192.168.6.206:8080/video'  # Example for IP Webcam app
+cap = VideoStream(ip_camera_url)
 
 while True:
     ret, frame = cap.read()
-    if not ret:
+    if not ret or frame is None:
         break
 
     # Run inference on the current frame
