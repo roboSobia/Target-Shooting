@@ -8,6 +8,10 @@ import time
 # Set prediction confidence threshold (adjust as needed)
 CONF_THRESHOLD = 0.7
 
+# Depth estimation parameters
+FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
+BALLOON_WIDTH = 0.22  # in meters (e.g., 30 cm, adjust based on your balloon size)
+
 # Helper function to determine a basic color name from BGR values
 def get_color_name(bgr):
     # Convert BGR to RGB for easier interpretation
@@ -30,8 +34,7 @@ def get_color_name(bgr):
         return f"rgb({int(r)}, {int(g)}, {int(b)})"
 
 # Load your trained YOLO model (assumed to detect balloons)
-
-model = YOLO('Target-Shooting\TargetDetection\\runs\detect\\train\weights\\best.pt')
+model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # --- Arduino Serial Setup ---
 # Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
@@ -69,7 +72,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream using the threaded VideoStream
-ip_camera_url = 'http://192.168.1.8:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.1.41:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 while True:
@@ -113,6 +116,12 @@ while True:
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
+              # Calculate pixel width of the balloon
+            pixel_width = x2 - x1
+
+            # Estimate depth: Z = (f * W) / w
+            depth = (FOCAL_LENGTH * BALLOON_WIDTH) / pixel_width if pixel_width > 0 else 0.0
+
             # Extract the region of interest (ROI) from the frame
             roi = frame[y1:y2, x1:x2]
             # Skip if ROI is empty (could happen due to bounding box issues)
@@ -128,7 +137,7 @@ while True:
             # Format: color,x,y\n (e.g., red,123,456\n)
             if arduino is not None:
              try:
-               data_str = f"{color_name},{center_x},{center_y}\n"
+               data_str = f"{color_name},{center_x},{center_y},{depth:.2f}\n"
                print(f"Sending to Arduino: {data_str.strip()}")
                arduino.write(data_str.encode('utf-8'))
                time.sleep(0.05)  # Allow Arduino to respond
@@ -148,11 +157,12 @@ while True:
             #         print(f"Serial send error: {e}")
 
             # Prepare text info including label, color, confidence, and position
-            info_text = f"{label} ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y})"
+            info_text = f"{label} Depth: {depth:.2f}m ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y})"
             balloons_info.append({'box': (x1, y1, x2, y2),
                                    'color': color_name,
                                    'conf': confs[i],
-                                   'pos': (center_x, center_y)})
+                                   'pos': (center_x, center_y),
+                                   'depth': depth})
 
             # Draw the bounding box on the frame
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -162,7 +172,7 @@ while True:
 
     # Optionally, display a summary of all detected balloons on the frame
     summary_text = "Detected Balloons: " + ", ".join(
-        [f"{info['color']} {info['pos']} ({info['conf']:.2f})" for info in balloons_info])
+        [f"{info['color']} {info['pos']} ({info['conf']:.2f}, {info.get('depth', 0.0):.2f}m)" for info in balloons_info])
     cv2.putText(frame, summary_text, (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
