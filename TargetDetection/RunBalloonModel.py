@@ -30,6 +30,7 @@ def get_color_name(bgr):
         return f"rgb({int(r)}, {int(g)}, {int(b)})"
 
 # Load your trained YOLO model (assumed to detect balloons)
+
 model = YOLO('Target-Shooting\TargetDetection\\runs\detect\\train\weights\\best.pt')
 
 # --- Arduino Serial Setup ---
