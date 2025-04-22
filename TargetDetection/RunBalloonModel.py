@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import threading
+import serial  # <-- Added for Arduino serial communication
+import time
 
 # Set prediction confidence threshold (adjust as needed)
 CONF_THRESHOLD = 0.7
@@ -27,14 +30,51 @@ def get_color_name(bgr):
         return f"rgb({int(r)}, {int(g)}, {int(b)})"
 
 # Load your trained YOLO model (assumed to detect balloons)
-model = YOLO('TargetDetection\\runs\\detect\\train\\weights\\best.pt')
 
-# Open the default camera (0)
-cap = cv2.VideoCapture(0)
+model = YOLO('Target-Shooting\TargetDetection\\runs\detect\\train\weights\\best.pt')
+
+# --- Arduino Serial Setup ---
+# Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
+try:
+    arduino = serial.Serial('COM3', 9600, timeout=1)
+    time.sleep(2)  # Wait for the connection to establish
+    print("Arduino connected successfully.")
+except Exception as e:
+    print(f"Could not open serial port: {e}")
+    arduino = None
+
+class VideoStream:
+    def __init__(self, src):
+        self.cap = cv2.VideoCapture(src)
+        self.ret, self.frame = self.cap.read()
+        self.stopped = False
+        self.lock = threading.Lock()
+        self.thread = threading.Thread(target=self.update, daemon=True)
+        self.thread.start()
+
+    def update(self):
+        while not self.stopped:
+            ret, frame = self.cap.read()
+            with self.lock:
+                self.ret = ret
+                self.frame = frame
+
+    def read(self):
+        with self.lock:
+            return self.ret, self.frame.copy() if self.frame is not None else (False, None)
+
+    def release(self):
+        self.stopped = True
+        self.thread.join()
+        self.cap.release()
+
+# Open the IP camera stream using the threaded VideoStream
+ip_camera_url = 'http://192.168.1.8:8080/video'  # Example for IP Webcam app
+cap = VideoStream(ip_camera_url)
 
 while True:
     ret, frame = cap.read()
-    if not ret:
+    if not ret or frame is None:
         break
 
     # Run inference on the current frame
@@ -84,6 +124,29 @@ while True:
             # Determine a basic color name from the average color
             color_name = get_color_name(mean_color)
 
+            # --- Send data to Arduino ---
+            # Format: color,x,y\n (e.g., red,123,456\n)
+            if arduino is not None:
+             try:
+               data_str = f"{color_name},{center_x},{center_y}\n"
+               print(f"Sending to Arduino: {data_str.strip()}")
+               arduino.write(data_str.encode('utf-8'))
+               time.sleep(0.05)  # Allow Arduino to respond
+
+        # Read response if available
+               while arduino.in_waiting:
+                line = arduino.readline().decode('utf-8').strip()
+                print("Arduino says:", line)
+             except Exception as e:
+                  print(f"Serial send error: {e}")
+
+            # if arduino is not None:
+            #     try:
+            #         data_str = f"{color_name},{center_x},{center_y}\n"
+            #         arduino.write(data_str.encode('utf-8'))
+            #     except Exception as e:
+            #         print(f"Serial send error: {e}")
+
             # Prepare text info including label, color, confidence, and position
             info_text = f"{label} ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y})"
             balloons_info.append({'box': (x1, y1, x2, y2),
@@ -112,3 +175,5 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+if arduino is not None:
+    arduino.close()
