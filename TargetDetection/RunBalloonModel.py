@@ -10,7 +10,7 @@ CONF_THRESHOLD = 0.7
 
 # Depth estimation parameters
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
-BALLOON_WIDTH = 0.22  # in meters (e.g., 30 cm, adjust based on your balloon size)
+BALLOON_WIDTH = 0.17  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
 # Helper function to determine a basic color name from BGR values
 def get_color_name(bgr):
@@ -72,7 +72,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream using the threaded VideoStream
-ip_camera_url = 'http://192.168.1.41:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.166.132:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 while True:
