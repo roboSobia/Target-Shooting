@@ -30,7 +30,7 @@ float calculatePanAngle(int targetX, int imageWidth, float camFOV) {
 //Tilt code
 float calculateTiltAngle(int targetY, int imageHeight, float camFOV) {
   int centerY = imageHeight / 2;
-  float angle = 90 - ((float)(targetY - centerY) / imageHeight) * camFOV;
+  float angle = 90 + ((float)(targetY - centerY) / imageHeight) * camFOV;
   return angle;
 }
 void setup() {
@@ -40,11 +40,9 @@ void setup() {
   panServo.attach(9);  // Attaches the servo on pin 9 to the servo object
   tiltServo.attach(10);
 
- // panServo.write(90);
+  // panServo.write(90);
 
   tiltServo.write(90);
- 
-
 }
 
 void loop() {
@@ -55,13 +53,13 @@ void loop() {
     int colorEnd = data.indexOf(')');                     // Find the end of "rgb(...)"
     int firstComma = data.indexOf(',', colorEnd + 1);     // First comma after color
     int secondComma = data.indexOf(',', firstComma + 1);  // Second comma after color
-                                                          // int thirdComma = data.indexOf(',', secondComma + 1);
+    //int thirdComma = data.indexOf(',', secondComma + 1);
 
     if (colorEnd > 0 && firstComma > colorEnd && secondComma > firstComma) {
       color = data.substring(0, colorEnd + 1);  // Include the closing ')'
       centerX = data.substring(firstComma + 1, secondComma).toInt();
       centerY = data.substring(secondComma + 1).toInt();
-      // distance_to_target_cm = data.substring(thirdComma + 1).toFloat(); //
+      //distance_to_target_cm = data.substring(thirdComma + 1).toFloat();
     }
 
 
@@ -83,6 +81,8 @@ void loop() {
     //Debugging
     Serial.print("CenterX: ");
     Serial.print(centerX);
+      Serial.print(" | Adjusted Angle X before function: ");
+    Serial.println(adjustedTargetX);
     Serial.print(" | Adjusted Angle X: ");
     Serial.println(targetAngleX);
 
@@ -103,22 +103,24 @@ void loop() {
     Serial.println(targetAngleY);
 
 
-   // if (abs(currentAngleX - targetAngleX) > 1)
-     {
+    //if (abs(currentAngleX - targetAngleX) > 1)
+    {
       panServo.write(targetAngleX);
     }
-   // if (abs(currentAngleY - targetAngleY) > 1) 
+    if (abs(currentAngleY - targetAngleY) > 1)
     {
-       tiltServo.write(targetAngleY);
+      tiltServo.write(targetAngleY);
     }
+
+    Serial.println("depth:");
+
+    Serial.println(distance_to_target_cm);
   }
 
-  
   // panServo.write(90);
 
   // // delay(1000);
   // // tiltServo.write(90);
   // delay(500);
   // tiltServo.write(90);
-
 }

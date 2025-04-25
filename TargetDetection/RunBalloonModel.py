@@ -39,7 +39,7 @@ model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 # --- Arduino Serial Setup ---
 # Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
 try:
-    arduino = serial.Serial('COM3', 9600, timeout=1)
+    arduino = serial.Serial('COM7', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -81,7 +81,7 @@ while True:
         break
 
     # Run inference on the current frame
-    results = model.predict(source=frame, show=False)  # show=False so we can control our display
+    # results = model.predict(source=frame, show=False)  # show=False so we can control our display
 
     # List to store detected balloon info for display
     balloons_info = []
