@@ -4,6 +4,7 @@ from ultralytics import YOLO
 import threading
 import serial  # <-- Added for Arduino serial communication
 import time
+import math
 
 # Set prediction confidence threshold (adjust as needed)
 CONF_THRESHOLD = 0.7
@@ -11,6 +12,42 @@ CONF_THRESHOLD = 0.7
 # Depth estimation parameters
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.17  # in meters (e.g., 30 cm, adjust based on your balloon size)
+
+image_width = 640;    # width of your camera frame
+image_height = 480;   # width of your camera frame
+x_cameraFOV = 86;  # in degrees
+y_cameraFOV = 53;  # in degrees
+target_angle_x = 0;
+target_angle_y = 0;
+depth = 150;
+laser_offset_cm_x = 7;
+laser_offset_cm_y = 0;
+
+# Function to calculate pan servo angle
+def calculate_pan_angle(target_x, image_width, cam_fov):
+    center_x = image_width / 2
+    fov_rad = math.radians(x_cameraFOV)
+    width_at_target = 2 * depth * math.tan(fov_rad / 2)  # cm
+    pixels_per_cm_x = image_width / width_at_target
+    laser_camera_offset_pixels_x = laser_offset_cm_x * pixels_per_cm_x
+    target_x += laser_camera_offset_pixels_x
+    angle = 90 - ((target_x - center_x) / image_width) * cam_fov
+    angle = round(angle)
+    angle = max(0, min(180, angle))
+    return angle
+
+# Function to calculate tilt servo angle
+def calculate_tilt_angle(target_y, image_height, cam_fov):
+    center_y = image_height / 2
+    fov_rad_y = math.radians(y_cameraFOV)  # Vertical FOV in radians
+    height_at_target = 2 * depth * math.tan(fov_rad_y / 2)  # Height in cm at target distance
+    pixels_per_cm_y = image_height / height_at_target  # Pixels per cm in vertical direction
+    laser_camera_offset_pixels_y = laser_offset_cm_y * pixels_per_cm_y  # Vertical laser offset in pixels
+    target_y += laser_camera_offset_pixels_y
+    angle = 90 + ((target_y - center_y) / image_height) * cam_fov
+    angle = round(angle)
+    angle = max(0, min(180, angle))
+    return angle
 
 # Helper function to determine a basic color name from BGR values
 def get_color_name(bgr):
@@ -72,7 +109,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream using the threaded VideoStream
-ip_camera_url = 'http://192.168.166.132:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.1.41:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 while True:
@@ -81,7 +118,7 @@ while True:
         break
 
     # Run inference on the current frame
-    # results = model.predict(source=frame, show=False)  # show=False so we can control our display
+    results = model.predict(source=frame, show=False)  # show=False so we can control our display
 
     # List to store detected balloon info for display
     balloons_info = []
@@ -133,11 +170,14 @@ while True:
             # Determine a basic color name from the average color
             color_name = get_color_name(mean_color)
 
+            pan_angle = calculate_pan_angle(center_x,image_width,x_cameraFOV)
+            tilt_angle = calculate_pan_angle(center_y,image_height,y_cameraFOV)
+
             # --- Send data to Arduino ---
             # Format: color,x,y\n (e.g., red,123,456\n)
             if arduino is not None:
              try:
-               data_str = f"{color_name},{center_x},{center_y},{depth:.2f}\n"
+               data_str = f"{pan_angle},{tilt_angle}\n"
                print(f"Sending to Arduino: {data_str.strip()}")
                arduino.write(data_str.encode('utf-8'))
                time.sleep(0.05)  # Allow Arduino to respond
