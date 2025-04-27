@@ -13,9 +13,9 @@ CONF_THRESHOLD = 0.7
 
 # Depth estimation parameters
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
-BALLOON_WIDTH = 0.17  # in meters (e.g., 30 cm, adjust based on your balloon size)
+BALLOON_WIDTH = 0.15  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "green"    # Target color wanted
+TARGET_COLOR = "yellow"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
@@ -23,7 +23,7 @@ IMAGE_HEIGHT = 480
 X_CAMERA_FOV = 86  # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
-LASER_OFFSET_CM_X = 7
+LASER_OFFSET_CM_X = 15
 LASER_OFFSET_CM_Y = 0
 
 depth = 150;
@@ -31,10 +31,10 @@ depth = 150;
 # Function to calculate pan servo angle
 def calculate_pan_angle(target_x, image_width, cam_fov):
     center_x = image_width / 2
-    fov_rad = math.radians(x_cameraFOV)
+    fov_rad = math.radians(X_CAMERA_FOV)
     width_at_target = 2 * depth * math.tan(fov_rad / 2)  # cm
     pixels_per_cm_x = image_width / width_at_target
-    laser_camera_offset_pixels_x = laser_offset_cm_x * pixels_per_cm_x
+    laser_camera_offset_pixels_x = LASER_OFFSET_CM_X * pixels_per_cm_x
     target_x += laser_camera_offset_pixels_x
     angle = 90 - ((target_x - center_x) / image_width) * cam_fov
     angle = round(angle)
@@ -44,14 +44,14 @@ def calculate_pan_angle(target_x, image_width, cam_fov):
 # Function to calculate tilt servo angle
 def calculate_tilt_angle(target_y, image_height, cam_fov):
     center_y = image_height / 2
-    fov_rad_y = math.radians(y_cameraFOV)  # Vertical FOV in radians
+    fov_rad_y = math.radians(Y_CAMERA_FOV)  # Vertical FOV in radians
     height_at_target = 2 * depth * math.tan(fov_rad_y / 2)  # Height in cm at target distance
     pixels_per_cm_y = image_height / height_at_target  # Pixels per cm in vertical direction
-    laser_camera_offset_pixels_y = laser_offset_cm_y * pixels_per_cm_y  # Vertical laser offset in pixels
+    laser_camera_offset_pixels_y = LASER_OFFSET_CM_Y * pixels_per_cm_y  # Vertical laser offset in pixels
     target_y += laser_camera_offset_pixels_y
     angle = 90 + ((target_y - center_y) / image_height) * cam_fov
-    angle = round(angle)
-    angle = max(0, min(180, angle))
+    # angle = round(angle)
+    # angle = max(0, min(180, angle))
     return angle
 
 # def closest_color(requested_color):
@@ -93,7 +93,7 @@ def get_color_name(bgr):
         return "green"
     elif r < 100 and g < 100 and b > 200:
         return "blue"
-    elif r > 200 and g > 200 and b < 100:
+    elif r > 160 and g > 140 and  b < 100:
         return "yellow"
     elif r < 50 and g < 50 and b < 50:
         return "black"
@@ -109,7 +109,7 @@ model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 # --- Arduino Serial Setup ---
 # Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
 try:
-    arduino = serial.Serial('COM7', 9600, timeout=1)
+    arduino = serial.Serial('COM8', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -142,7 +142,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream using the threaded VideoStream
-ip_camera_url = 'http://192.168.1.41:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.152:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 while True:
@@ -167,7 +167,8 @@ while True:
         cls_ids = result.boxes.cls.cpu().numpy()   # Class indices
         confs = result.boxes.conf.cpu().numpy()      # Confidence scores
 
-        # Loop through each detected object
+        # Loop through each detected obj
+        # ect
         for i, box in enumerate(boxes):
             # Apply confidence threshold filter
             if confs[i] < CONF_THRESHOLD:
@@ -191,6 +192,7 @@ while True:
 
             # Estimate depth: Z = (f * W) / w
             depth = (FOCAL_LENGTH * BALLOON_WIDTH) / pixel_width if pixel_width > 0 else 0.0
+            depth *= 100
 
             # Extract the region of interest (ROI) from the frame
             roi = frame[y1:y2, x1:x2]
@@ -205,18 +207,34 @@ while True:
 
             print(color_name)
 
-            if color_name != TARGET_COLOR:
-                continue
+            # if color_name != TARGET_COLOR:
+            #     continue
             
-            pan_angle = calculate_pan_angle(center_x,image_width,x_cameraFOV)
-            tilt_angle = calculate_pan_angle(center_y,image_height,y_cameraFOV)
+            pan_angle = calculate_pan_angle(center_x,IMAGE_WIDTH,X_CAMERA_FOV)
+            tilt_angle = calculate_tilt_angle(center_y,IMAGE_HEIGHT,Y_CAMERA_FOV)
+
+            info_text = f"{label} Depth: {depth:.2f}m ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y})"
+            balloons_info.append({'box': (x1, y1, x2, y2),
+                                   'color': color_name,
+                                   'conf': confs[i],
+                                   'pos': (center_x, center_y),
+                                   'depth': depth})
+            
+            print(info_text)
+            
+            # Draw the bounding box on the frame
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # Put the text label above the bounding box
+            cv2.putText(frame, info_text, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
 
             # --- Send data to Arduino ---
             # Format: color,x,y\n (e.g., red,123,456\n)
             if arduino is not None:
              try:
                data_str = f"{pan_angle},{tilt_angle}\n"
-               print(f"Sending to Arduino: {data_str.strip()}")
+               print(f"Sending to Arduino: {data_str.strip()}") 
                arduino.write(data_str.encode('utf-8'))
                time.sleep(0.05)  # Allow Arduino to respond
 
@@ -227,26 +245,16 @@ while True:
              except Exception as e:
                   print(f"Serial send error: {e}")
 
-            # if arduino is not None:
-            #     try:
-            #         data_str = f"{color_name},{center_x},{center_y}\n"
-            #         arduino.write(data_str.encode('utf-8'))
-            #     except Exception as e:
-            #         print(f"Serial send error: {e}")
+            if arduino is not None:
+                try:
+                    data_str = f"{color_name},{center_x},{center_y}\n"
+                    arduino.write(data_str.encode('utf-8'))
+                except Exception as e:
+                    print(f"Serial send error: {e}")
 
             # Prepare text info including label, color, confidence, and position
-            info_text = f"{label} Depth: {depth:.2f}m ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y})"
-            balloons_info.append({'box': (x1, y1, x2, y2),
-                                   'color': color_name,
-                                   'conf': confs[i],
-                                   'pos': (center_x, center_y),
-                                   'depth': depth})
 
-            # Draw the bounding box on the frame
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            # Put the text label above the bounding box
-            cv2.putText(frame, info_text, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
 
     # Optionally, display a summary of all detected balloons on the frame
     summary_text = "Detected Balloons: " + ", ".join(
@@ -256,6 +264,21 @@ while True:
 
     # Show the final frame with overlays
     cv2.imshow('YOLO Balloon Detection', frame)
+
+    for ballon in balloons_info:
+        if arduino is not None:
+             try:
+               data_str = f"{pan_angle},{tilt_angle}\n"
+               print(f"Sending to Arduino: {data_str.strip()}") 
+               arduino.write(data_str.encode('utf-8'))
+               time.sleep(0.05)  # Allow Arduino to respond
+
+        # Read response if available
+               while arduino.in_waiting:
+                line = arduino.readline().decode('utf-8').strip()
+                print("Arduino says:", line)
+             except Exception as e:
+                  print(f"Serial send error: {e}")
 
     # Exit the loop on pressing 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -1,1 +1,2 @@
-get_color_name
+angle)
+    # angle = max(0, min(180

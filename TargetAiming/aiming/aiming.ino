@@ -1,7 +1,5 @@
 #include <Servo.h>
 
-Servo panServo;
-Servo tiltServo;
 
 float panAngle;
 float tiltAngle;
@@ -9,7 +7,6 @@ float tiltAngle;
 // Define pin connections
 const int stepPin = 2;    // Pin connected to STEP pin of driver
 const int dirPin = 3;     // Pin connected to DIR pin of driver
-
 const int switchPin=4;
 
 int total_steps = 0;
@@ -19,8 +16,8 @@ int reverseDirection = 0;
 // Define motor parameters
 const int stepsPerRevolution =200;  // NEMA 17 typically has 200 steps/rev (1.8° per step)
  int motorSpeed = 1000;         // Slower speed: 1000µs
-Servo servo1; // MG996R
-Servo servo2; // S3003
+Servo panServo; // MG996R
+Servo tiltServo; // S3003
 
 // MG996R Constants
 const int minAngle1 = 0;
@@ -73,8 +70,12 @@ void rotateSteps(int steps) {
 void setup() {
   Serial.begin(9600);
 
-  panServo.attach(9);  // Attaches the servo on pin 9 to the servo object
-  tiltServo.attach(10);
+  pinMode(dirPin, OUTPUT);
+  pinMode(stepPin, OUTPUT);
+  pinMode(switchPin, INPUT_PULLUP);
+
+  panServo.attach(7,500, 2500);  // Attaches the servo on pin 9 to the servo object
+  tiltServo.attach(6);
 
   panServo.write(90);
   tiltServo.write(90);
@@ -97,8 +98,22 @@ void loop() {
       Serial.print("Tilt Angle: ");
       Serial.println(tiltAngle);
     }
-
     panServo.write(panAngle);
+
     tiltServo.write(tiltAngle);
+    delay(20000);
+    shoot();
+    while (Serial.available() > 0){
+      Serial.read();
+    }
+
+
+
+    // delay(30000);
   }
+    // panServo.write(90);
+    
+
+    
+
 }
