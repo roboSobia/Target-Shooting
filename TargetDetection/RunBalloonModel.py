@@ -28,6 +28,34 @@ LASER_OFFSET_CM_Y = 0
 
 depth = 150;
 
+# --- NEW FUNCTION ADDED ---
+def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
+    if arduino is None:
+        print("Arduino not connected.")
+        return False
+    try:
+        # Send data
+        data_str = f"{pan_angle},{tilt_angle}\n"
+        print(f"Sending to Arduino: {data_str.strip()}")
+        arduino.write(data_str.encode('utf-8'))
+        time.sleep(0.05)  # Allow Arduino to respond
+
+        
+        # Wait for acknowledgment
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if arduino.in_waiting:
+                line = arduino.readline().decode('utf-8').strip()
+                print("Arduino says:", line)
+                if line == "ACK":
+                    return True
+            time.sleep(0.01)  # Small sleep to prevent CPU overuse
+        print("Timeout waiting for Arduino acknowledgment.")
+        return False
+    except Exception as e:
+        print(f"Serial communication error: {e}")
+        return False
+
 # Function to calculate pan servo angle
 def calculate_pan_angle(target_x, image_width, cam_fov):
     center_x = image_width / 2
@@ -230,31 +258,9 @@ while True:
 
 
             # --- Send data to Arduino ---
-            # Format: color,x,y\n (e.g., red,123,456\n)
-            if arduino is not None:
-             try:
-               data_str = f"{pan_angle},{tilt_angle}\n"
-               print(f"Sending to Arduino: {data_str.strip()}") 
-               arduino.write(data_str.encode('utf-8'))
-               time.sleep(0.05)  # Allow Arduino to respond
-
-        # Read response if available
-               while arduino.in_waiting:
-                line = arduino.readline().decode('utf-8').strip()
-                print("Arduino says:", line)
-             except Exception as e:
-                  print(f"Serial send error: {e}")
-
-            if arduino is not None:
-                try:
-                    data_str = f"{color_name},{center_x},{center_y}\n"
-                    arduino.write(data_str.encode('utf-8'))
-                except Exception as e:
-                    print(f"Serial send error: {e}")
+            send_to_arduino(arduino,pan_angle,tilt_angle,50000)
 
             # Prepare text info including label, color, confidence, and position
-
-
 
     # Optionally, display a summary of all detected balloons on the frame
     summary_text = "Detected Balloons: " + ", ".join(
@@ -264,21 +270,6 @@ while True:
 
     # Show the final frame with overlays
     cv2.imshow('YOLO Balloon Detection', frame)
-
-    for ballon in balloons_info:
-        if arduino is not None:
-             try:
-               data_str = f"{pan_angle},{tilt_angle}\n"
-               print(f"Sending to Arduino: {data_str.strip()}") 
-               arduino.write(data_str.encode('utf-8'))
-               time.sleep(0.05)  # Allow Arduino to respond
-
-        # Read response if available
-               while arduino.in_waiting:
-                line = arduino.readline().decode('utf-8').strip()
-                print("Arduino says:", line)
-             except Exception as e:
-                  print(f"Serial send error: {e}")
 
     # Exit the loop on pressing 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):

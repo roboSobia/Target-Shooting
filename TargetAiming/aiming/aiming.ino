@@ -93,22 +93,13 @@ void loop() {
       tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
 
       // Now you have panAngle and tiltAngle as floats
-      Serial.print("Pan Angle: ");
-      Serial.println(panAngle);
-      Serial.print("Tilt Angle: ");
-      Serial.println(tiltAngle);
     }
     panServo.write(panAngle);
 
     tiltServo.write(tiltAngle);
     delay(20000);
     shoot();
-    while (Serial.available() > 0){
-      Serial.read();
-    }
-
-
-
+    Serial.println("ACK");
     // delay(30000);
   }
     // panServo.write(90);
