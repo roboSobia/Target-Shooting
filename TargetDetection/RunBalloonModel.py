@@ -5,6 +5,8 @@ import threading
 import serial  # <-- Added for Arduino serial communication
 import time
 import math
+import webcolors
+from scipy.spatial import KDTree
 
 # Set prediction confidence threshold (adjust as needed)
 CONF_THRESHOLD = 0.7
@@ -13,15 +15,18 @@ CONF_THRESHOLD = 0.7
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.17  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-image_width = 640;    # width of your camera frame
-image_height = 480;   # width of your camera frame
-x_cameraFOV = 86;  # in degrees
-y_cameraFOV = 53;  # in degrees
-target_angle_x = 0;
-target_angle_y = 0;
+TARGET_COLOR = "green"    # Target color wanted
+
+IMAGE_WIDTH = 640 
+IMAGE_HEIGHT = 480
+
+X_CAMERA_FOV = 86  # in degrees
+Y_CAMERA_FOV = 53  # in degrees
+
+LASER_OFFSET_CM_X = 7
+LASER_OFFSET_CM_Y = 0
+
 depth = 150;
-laser_offset_cm_x = 7;
-laser_offset_cm_y = 0;
 
 # Function to calculate pan servo angle
 def calculate_pan_angle(target_x, image_width, cam_fov):
@@ -48,6 +53,34 @@ def calculate_tilt_angle(target_y, image_height, cam_fov):
     angle = round(angle)
     angle = max(0, min(180, angle))
     return angle
+
+# def closest_color(requested_color):
+#     min_colors = {}
+#     for hex_key, name in webcolors.CSS3_HEX_TO_NAMES.items():  # Use .items() to get hex and name
+#         r_c, g_c, b_c = webcolors.hex_to_rgb(hex_key)
+#         rd = (r_c - requested_color[0]) ** 2
+#         gd = (g_c - requested_color[1]) ** 2
+#         bd = (b_c - requested_color[2]) ** 2
+#         min_colors[rd + gd + bd] = name
+#     return min_colors[min(min_colors.keys())]
+
+# def get_color_name(rgb_tuple):
+#     # Convert list to tuple if necessary
+#     if isinstance(rgb_tuple, list):
+#         rgb_tuple = tuple(rgb_tuple)
+    
+#     # Validate input
+#     if not isinstance(rgb_tuple, tuple) or len(rgb_tuple) != 3:
+#         raise ValueError("Input must be a tuple or list of 3 integers [R, G, B]")
+#     if not all(isinstance(x, int) and 0 <= x <= 255 for x in rgb_tuple):
+#         raise ValueError("RGB values must be integers between 0 and 255")
+    
+#     try:
+#         # Try exact match using rgb_to_name
+#         return webcolors.rgb_to_name(rgb_tuple, spec='css3')
+#     except ValueError:
+#         # Fallback to closest color
+#         return closest_color(rgb_tuple)
 
 # Helper function to determine a basic color name from BGR values
 def get_color_name(bgr):
@@ -166,10 +199,15 @@ while True:
                 continue
 
             # Compute the average BGR color in the ROI
-            mean_color = cv2.mean(roi)[:3]
-            # Determine a basic color name from the average color
+            mean_color = [int(round(x)) for x in cv2.mean(roi)[:3]]  # Round floats to integers            # Determine a basic color name from the average color
+            print(mean_color)
             color_name = get_color_name(mean_color)
 
+            print(color_name)
+
+            if color_name != TARGET_COLOR:
+                continue
+            
             pan_angle = calculate_pan_angle(center_x,image_width,x_cameraFOV)
             tilt_angle = calculate_pan_angle(center_y,image_height,y_cameraFOV)
 
