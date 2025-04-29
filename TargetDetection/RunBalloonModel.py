@@ -28,7 +28,16 @@ LASER_OFFSET_CM_Y = 0
 
 depth = 150;
 
-# --- NEW FUNCTION ADDED ---
+shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
+
+# Check if balloon is already shot before
+def is_balloon_already_shot(center_x, center_y, threshold=50):
+    for shot_x, shot_y in shot_balloons:
+        distance = math.sqrt((center_x - shot_x) ** 2 + (center_y - shot_y) ** 2)
+        if distance < threshold:
+            return True
+    return False
+
 def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
     if arduino is None:
         print("Arduino not connected.")
@@ -119,7 +128,7 @@ def get_color_name(bgr):
         return "red"
     elif r < 100 and g > 200 and b < 100:
         return "green"
-    elif r < 100 and g < 100 and b > 200:
+    elif r < 100 and g < 160 and b > 170:
         return "blue"
     elif r > 160 and g > 140 and  b < 100:
         return "yellow"
@@ -238,6 +247,13 @@ while True:
             # if color_name != TARGET_COLOR:
             #     continue
             
+            if is_balloon_already_shot(center_x, center_y):
+                print(f"Skipping balloon at ({center_x}, {center_y}): Already shot.")
+                continue
+
+            shot_balloons.append((center_x, center_y))    # Should be add when arduino acknowledge shooting
+            print("Shoot it!")
+
             pan_angle = calculate_pan_angle(center_x,IMAGE_WIDTH,X_CAMERA_FOV)
             tilt_angle = calculate_tilt_angle(center_y,IMAGE_HEIGHT,Y_CAMERA_FOV)
 
