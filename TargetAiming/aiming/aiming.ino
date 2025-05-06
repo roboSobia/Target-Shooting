@@ -77,34 +77,34 @@ void setup() {
   panServo.attach(7,500, 2500);  // Attaches the servo on pin 9 to the servo object
   tiltServo.attach(6);
 
-  panServo.write(0);
+  panServo.write(90);
 
-  tiltServo.write(0);
-  delay(10000);
+  tiltServo.write(90);
 }
 
 void loop() {
   if (Serial.available()) {
-    // String data = Serial.readStringUntil('\n');  // Read until newline
-    // data.trim();                                 // Remove whitespace
+    String data = Serial.readStringUntil('\n');  // Read until newline
+    data.trim();                                 // Remove whitespace
 
-    // int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
+    int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
 
-    // if (commaIndex > 0) {
-    //   panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
-    //   tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
+    if (commaIndex > 0) {
+      panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
+      tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
 
-    //   // Now you have panAngle and tiltAngle as floats
-    // }
-    // panServo.write(panAngle);
+      // Now you have panAngle and tiltAngle as floats
+    }
+    panServo.write(panAngle);
 
-    // tiltServo.write(tiltAngle);
-    // delay(20000);
-    // shoot();
-    // Serial.println("ACK");
-    // delay(30000);
+    tiltServo.write(tiltAngle);
+    delay(20000);
+    shoot();
+    Serial.println("ACK");
+    delay(30000);
   }
-    // panServo.write(90);
+    panServo.write(90);
+    tiltServo.write(90);
     
 
     

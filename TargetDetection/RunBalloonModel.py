@@ -15,7 +15,7 @@ CONF_THRESHOLD = 0.5
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.15  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "green"    # Target color wanted
+TARGET_COLOR = "red"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
@@ -31,6 +31,23 @@ depth = 150;
 
 shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
 
+# Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
+def setup_serial():
+    ser = serial.Serial()
+    ser.baudrate = 9600
+    ser.port = 'COM4' 
+    ser.timeout = 2
+    
+    try:
+        ser.open()
+        print("Serial port opened successfully!")
+        return ser
+    except Exception as e:
+        print(f"Error opening serial port: {e}")
+        return None
+
+
+ser = setup_serial()
 # Check if balloon is already shot before
 def is_balloon_already_shot(center_x, center_y, threshold=50):
     for shot_x, shot_y in shot_balloons:
@@ -39,32 +56,23 @@ def is_balloon_already_shot(center_x, center_y, threshold=50):
             return True
     return False
 
-def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
-    if arduino is None:
-        print("Arduino not connected.")
-        return False
-    try:
-        # Send data
-        data_str = f"{pan_angle},{tilt_angle}\n"
-        print(f"Sending to Arduino: {data_str.strip()}")
-        arduino.write(data_str.encode('utf-8'))
-        time.sleep(0.05)  # Allow Arduino to respond
 
-        
-        # Wait for acknowledgment
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            if arduino.in_waiting:
-                line = arduino.readline().decode('utf-8').strip()
-                print("Arduino says:", line)
-                if line == "ACK":
-                    return True
-            time.sleep(0.01)  # Small sleep to prevent CPU overuse
-        print("Timeout waiting for Arduino acknowledgment.")
-        return False
-    except Exception as e:
-        print(f"Serial communication error: {e}")
-        return False
+
+def send_to_arduino(pan_angle, tilt_angle):
+    command = f"{pan_angle},{tilt_angle}\n"
+    
+    # Send the command as bytes
+    ser.write(command.encode())
+    
+    # Wait a moment for the ESP to process and respond
+    time.sleep(0.1)
+    
+    # Read the response (if any)
+    response = b''
+    while ser.in_waiting:
+        response += ser.read(1)
+    
+    return response.decode() if response else None
 
 # Function to calculate pan servo angle
 def calculate_pan_angle(target_x, image_width, cam_fov):
@@ -145,14 +153,6 @@ def get_color_name(bgr):
 model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # --- Arduino Serial Setup ---
-# Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
-try:
-    arduino = serial.Serial('COM8', 9600, timeout=1)
-    time.sleep(2)  # Wait for the connection to establish
-    print("Arduino connected successfully.")
-except Exception as e:
-    print(f"Could not open serial port: {e}")
-    arduino = None
 
 class VideoStream:
     def __init__(self, src):
@@ -182,6 +182,8 @@ class VideoStream:
 # Open the IP camera stream using the threaded VideoStream
 ip_camera_url = 'http://192.168.55.152:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
+send_to_arduino(90,90)
+# time.sleep(10)
 
 while True:
     ret, frame = cap.read()
@@ -275,7 +277,7 @@ while True:
 
 
             # --- Send data to Arduino ---
-            send_to_arduino(arduino,pan_angle,tilt_angle,50000)
+            send_to_arduino(pan_angle,tilt_angle)
 
             # Prepare text info including label, color, confidence, and position
 
