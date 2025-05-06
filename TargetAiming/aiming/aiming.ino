@@ -1,7 +1,5 @@
 #include <Servo.h>
 
-Servo panServo;
-Servo tiltServo;
 
 float panAngle;
 float tiltAngle;
@@ -9,7 +7,6 @@ float tiltAngle;
 // Define pin connections
 const int stepPin = 2;    // Pin connected to STEP pin of driver
 const int dirPin = 3;     // Pin connected to DIR pin of driver
-
 const int switchPin=4;
 
 int total_steps = 0;
@@ -19,8 +16,8 @@ int reverseDirection = 0;
 // Define motor parameters
 const int stepsPerRevolution =200;  // NEMA 17 typically has 200 steps/rev (1.8° per step)
  int motorSpeed = 1000;         // Slower speed: 1000µs
-Servo servo1; // MG996R
-Servo servo2; // S3003
+Servo panServo; // S3003
+Servo tiltServo; // 996R
 
 // MG996R Constants
 const int minAngle1 = 0;
@@ -73,32 +70,43 @@ void rotateSteps(int steps) {
 void setup() {
   Serial.begin(9600);
 
-  panServo.attach(9);  // Attaches the servo on pin 9 to the servo object
-  tiltServo.attach(10);
+  pinMode(dirPin, OUTPUT);
+  pinMode(stepPin, OUTPUT);
+  pinMode(switchPin, INPUT_PULLUP);
 
-  panServo.write(90);
-  tiltServo.write(90);
+  panServo.attach(7,500, 2500);  // Attaches the servo on pin 9 to the servo object
+  tiltServo.attach(6);
+
+  panServo.write(0);
+
+  tiltServo.write(0);
+  delay(10000);
 }
 
 void loop() {
   if (Serial.available()) {
-    String data = Serial.readStringUntil('\n');  // Read until newline
-    data.trim();                                 // Remove whitespace
+    // String data = Serial.readStringUntil('\n');  // Read until newline
+    // data.trim();                                 // Remove whitespace
 
-    int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
+    // int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
 
-    if (commaIndex > 0) {
-      panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
-      tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
+    // if (commaIndex > 0) {
+    //   panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
+    //   tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
 
-      // Now you have panAngle and tiltAngle as floats
-      Serial.print("Pan Angle: ");
-      Serial.println(panAngle);
-      Serial.print("Tilt Angle: ");
-      Serial.println(tiltAngle);
-    }
+    //   // Now you have panAngle and tiltAngle as floats
+    // }
+    // panServo.write(panAngle);
 
-    panServo.write(panAngle);
-    tiltServo.write(tiltAngle);
+    // tiltServo.write(tiltAngle);
+    // delay(20000);
+    // shoot();
+    // Serial.println("ACK");
+    // delay(30000);
   }
+    // panServo.write(90);
+    
+
+    
+
 }
