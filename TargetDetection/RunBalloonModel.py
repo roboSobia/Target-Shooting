@@ -9,18 +9,19 @@ import webcolors
 from scipy.spatial import KDTree
 
 # Set prediction confidence threshold (adjust as needed)
-CONF_THRESHOLD = 0.7
+CONF_THRESHOLD = 0.5
 
 # Depth estimation parameters
 FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.15  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "yellow"    # Target color wanted
+TARGET_COLOR = "green"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
 
-X_CAMERA_FOV = 86  # in degrees
+X_CAMERA_FOV = 86  
+# in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
 LASER_OFFSET_CM_X = 15
@@ -124,9 +125,9 @@ def get_color_name(bgr):
     # Convert BGR to RGB for easier interpretation
     r, g, b = bgr[2], bgr[1], bgr[0]
     # Simple heuristic to determine the color name
-    if r > 200 and g < 100 and b < 100:
+    if r > 150 and g > 70 and g<120 and b > 70 and b<120:
         return "red"
-    elif r < 100 and g > 200 and b < 100:
+    elif r > 140 and g > 150 and b < 150 and b<200:
         return "green"
     elif r < 100 and g < 160 and b > 170:
         return "blue"
@@ -244,8 +245,8 @@ while True:
 
             print(color_name)
 
-            # if color_name != TARGET_COLOR:
-            #     continue
+            if color_name != TARGET_COLOR:
+                continue
             
             if is_balloon_already_shot(center_x, center_y):
                 print(f"Skipping balloon at ({center_x}, {center_y}): Already shot.")
@@ -295,3 +296,10 @@ cap.release()
 cv2.destroyAllWindows()
 if arduino is not None:
     arduino.close()
+
+
+
+#Ballon rectangle: make it circular(not imortant )
+#Resolution
+#Shoot on red color 
+#

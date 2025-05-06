@@ -16,8 +16,8 @@ int reverseDirection = 0;
 // Define motor parameters
 const int stepsPerRevolution =200;  // NEMA 17 typically has 200 steps/rev (1.8° per step)
  int motorSpeed = 1000;         // Slower speed: 1000µs
-Servo panServo; // MG996R
-Servo tiltServo; // S3003
+Servo panServo; // S3003
+Servo tiltServo; // 996R
 
 // MG996R Constants
 const int minAngle1 = 0;
@@ -77,29 +77,31 @@ void setup() {
   panServo.attach(7,500, 2500);  // Attaches the servo on pin 9 to the servo object
   tiltServo.attach(6);
 
-  panServo.write(90);
-  tiltServo.write(90);
+  panServo.write(0);
+
+  tiltServo.write(0);
+  delay(10000);
 }
 
 void loop() {
   if (Serial.available()) {
-    String data = Serial.readStringUntil('\n');  // Read until newline
-    data.trim();                                 // Remove whitespace
+    // String data = Serial.readStringUntil('\n');  // Read until newline
+    // data.trim();                                 // Remove whitespace
 
-    int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
+    // int commaIndex = data.indexOf(',');  // Find the comma between pan and tilt
 
-    if (commaIndex > 0) {
-      panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
-      tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
+    // if (commaIndex > 0) {
+    //   panAngle = data.substring(0, commaIndex).toFloat();    // Pan angle
+    //   tiltAngle = data.substring(commaIndex + 1).toFloat();  // Tilt angle
 
-      // Now you have panAngle and tiltAngle as floats
-    }
-    panServo.write(panAngle);
+    //   // Now you have panAngle and tiltAngle as floats
+    // }
+    // panServo.write(panAngle);
 
-    tiltServo.write(tiltAngle);
-    delay(20000);
-    shoot();
-    Serial.println("ACK");
+    // tiltServo.write(tiltAngle);
+    // delay(20000);
+    // shoot();
+    // Serial.println("ACK");
     // delay(30000);
   }
     // panServo.write(90);
