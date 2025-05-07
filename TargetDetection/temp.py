@@ -12,8 +12,8 @@ from scipy.spatial import KDTree
 CONF_THRESHOLD = 0.5
 
 # Depth estimation parameters
-FOCAL_LENGTH = 550  # in pixels (adjust based on your camera)
-BALLOON_WIDTH = 0.15  # in meters (e.g., 30 cm, adjust based on your balloon size)
+FOCAL_LENGTH = 670  # in pixels (adjust based on your camera)
+BALLOON_WIDTH = 0.12  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
 TARGET_COLOR = "red"    # Target color wanted
 
@@ -24,7 +24,8 @@ X_CAMERA_FOV = 86  # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
 # Shooter offset from camera (cm)
-LASER_OFFSET_CM_Y = 7  # 7cm below the camera
+LASER_OFFSET_CM_X = 5   # Example: 5cm to the right of the camera
+LASER_OFFSET_CM_Y = 18  # 7cm below the camera
 
 # PID-like control parameters (ADJUST THESE TO TUNE PERFORMANCE)
 # Proportional gain - how quickly to move toward target (higher = faster but may overshoot)
@@ -36,7 +37,7 @@ current_pan = 90
 current_tilt = 90
 
 # Centering tolerance - how close to center we need to be (in pixels)
-CENTER_TOLERANCE = 15
+CENTER_TOLERANCE = 10  # Reduced from 15 to 10 for stricter locking
 
 # Max movement per iteration to prevent jerky motion
 MAX_ANGLE_CHANGE = 5
@@ -67,6 +68,19 @@ def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
     except Exception as e:
         print(f"Serial communication error: {e}")
         return False
+
+# Add a function to wait for an "ACK" message from the Arduino
+def wait_for_ack(arduino, timeout=40):
+    """Wait for an ACK message from the Arduino."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if arduino.in_waiting > 0:
+            response = arduino.readline().decode('utf-8').strip()
+            if response == "ACK":
+                print("ACK received from Arduino.")
+                return True
+    print("Timeout waiting for ACK from Arduino.")
+    return False
 
 # Calculate error from center of the frame
 def calculate_error(target_x, target_y):
@@ -132,11 +146,11 @@ def is_target_centered(error_x, error_y):
     return abs(error_x) < CENTER_TOLERANCE and abs(error_y) < CENTER_TOLERANCE
 
 # Load your trained YOLO model
-model = YOLO(r'.\runs\detect\\train\weights\best.pt')
+model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # Arduino Serial Setup
 try:
-    arduino = serial.Serial('COM4', 9600, timeout=1)
+    arduino = serial.Serial('COM8', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -169,36 +183,50 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.137.233:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
 def draw_crosshair(frame, color=(0, 0, 255), size=20, thickness=2):
     h, w = frame.shape[:2]
     center_x, center_y = w // 2, h // 2
-    
+
     # Horizontal line
     cv2.line(frame, (center_x - size, center_y), (center_x + size, center_y), color, thickness)
     # Vertical line
     cv2.line(frame, (center_x, center_y - size), (center_x, center_y + size), color, thickness)
-    
-    # Draw shooter position offset (7cm below)
-    # Calculate pixel offset based on FOV and depth
+
+    # Calculate pixel offsets based on FOV and depth
+    fov_rad_x = math.radians(X_CAMERA_FOV)
     fov_rad_y = math.radians(Y_CAMERA_FOV)
+
+    # Calculate width and height at the target depth
+    width_at_target = 2 * depth * math.tan(fov_rad_x / 2)
     height_at_target = 2 * depth * math.tan(fov_rad_y / 2)
+
+    # Pixels per cm for X and Y axes
+    pixels_per_cm_x = IMAGE_WIDTH / width_at_target
     pixels_per_cm_y = IMAGE_HEIGHT / height_at_target
+
+    # Calculate shooter position offsets in pixels
+    shooter_x_offset = int(LASER_OFFSET_CM_X * pixels_per_cm_x)
     shooter_y_offset = int(LASER_OFFSET_CM_Y * pixels_per_cm_y)
-    
-    # Draw shooter position indicator
+
+    # Adjust shooter position
+    shooter_x = center_x + shooter_x_offset
     shooter_y = center_y + shooter_y_offset
-    cv2.circle(frame, (center_x, shooter_y), 5, (0, 255, 255), -1)
-    cv2.line(frame, (center_x - 10, shooter_y), (center_x + 10, shooter_y), (0, 255, 255), 2)
+
+    # Draw shooter position indicator
+    cv2.circle(frame, (shooter_x, shooter_y), 5, (0, 255, 255), -1)
+    cv2.line(frame, (shooter_x - 10, shooter_y), (shooter_x + 10, shooter_y), (0, 255, 255), 2)
+    cv2.line(frame, (shooter_x, shooter_y - 10), (shooter_x, shooter_y + 10), (0, 255, 255), 2)
 
 # Time tracking for movement cooldown
 last_movement_time = 0
 MOVEMENT_COOLDOWN = 0.2  # seconds between movements
 send_to_arduino(arduino, 90,90);
 
+# Modify the main loop to include the shoot and ACK logic
 while True:
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -254,7 +282,7 @@ while True:
             estimated_depth *= 100  # Convert to cm
             
             # Update global depth if this is a good measurement
-            if 50 < estimated_depth < 1000:  # Sanity check on depth
+            if 30 < estimated_depth < 1000:  # Sanity check on depth
                 depth = estimated_depth
 
             # Extract the region of interest (ROI)
@@ -280,17 +308,14 @@ while True:
             
             # Draw the bounding box
             color = (0, 255, 0)  # Default green box
-            if color_name == TARGET_COLOR:
-                color = (0, 0, 255)  # Red box for target color
-                # Track the best target (highest confidence)
-                if confs[i] > best_confidence:
-                    best_confidence = confs[i]
-                    best_target = {
-                        'pos': (center_x, center_y),
-                        'box': (x1, y1, x2, y2),
-                        'info': info_text
-                    }
-                    target_found = True
+            if confs[i] > best_confidence:
+                best_confidence = confs[i]
+                best_target = {
+                    'pos': (center_x, center_y),
+                    'box': (x1, y1, x2, y2),
+                    'info': info_text
+                }
+                target_found = True
             
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, info_text, (x1, y1 - 10),
@@ -319,8 +344,20 @@ while True:
             # If not already shot, shoot and record
             if not is_balloon_already_shot(center_x, center_y):
                 print("FIRE!")
+                print(f"Estimated Depth: {estimated_depth:.1f} cm")  # Print the estimated depth
                 shot_balloons.append((center_x, center_y))
-                # Could add trigger command here
+                
+                # Send shoot command to Arduino
+                if arduino is not None:
+                    arduino.write("SHOOT\n".encode('utf-8'))
+                    print("Shoot command sent to Arduino.")
+                    
+                    # Wait for ACK from Arduino
+                    if wait_for_ack(arduino):
+                        print("Balloon successfully shot.")
+                    else:
+                        print("Failed to receive ACK. Retrying...")
+                        shot_balloons.pop()  # Remove the balloon from the list if ACK not received
         else:
             # Calculate new pan/tilt angles to center the target
             new_pan, new_tilt = calculate_new_angles(error_x, error_y)

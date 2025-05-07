@@ -105,8 +105,8 @@ void loop() {
     tiltServo.write(tiltAngle);
     //delay(20000);
     // shoot();
-    delay(500);
-    Serial.println("ACK");
+    // delay(500);
+    // Serial.println("ACK");
     //delay(30000);
   }
    
