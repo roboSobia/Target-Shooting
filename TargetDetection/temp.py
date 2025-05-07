@@ -46,6 +46,24 @@ depth = 150  # Initial depth estimate in cm
 
 shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
 
+# Modify the global variable to store angles instead of coordinates
+shot_angles = []  # Stores (pan, tilt) tuples of previously shot positions
+
+# Add this constant at the top with other constants
+INIT_PAN = 90
+INIT_TILT = 90
+
+def is_angle_already_shot(pan, tilt, threshold=10):
+    """
+    Check if we've already shot at these angles
+    threshold: angle difference tolerance in degrees
+    """
+    for shot_pan, shot_tilt in shot_angles:
+        if (abs(pan - shot_pan) < threshold and 
+            abs(tilt - shot_tilt) < threshold):
+            return True
+    return False
+
 # Check if balloon is already shot before
 def is_balloon_already_shot(center_x, center_y, threshold=50):
     for shot_x, shot_y in shot_balloons:
@@ -341,11 +359,10 @@ while True:
             cv2.putText(frame, "TARGET LOCKED!", (frame_center_x - 80, frame_center_y - 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
-            # If not already shot, shoot and record
-            if not is_balloon_already_shot(center_x, center_y):
-                print("FIRE!")
-                print(f"Estimated Depth: {estimated_depth:.1f} cm")  # Print the estimated depth
-                shot_balloons.append((center_x, center_y))
+            # Check if we've already shot at these angles
+            if not is_angle_already_shot(current_pan, current_tilt):
+                print(f"FIRE! at angles: Pan={current_pan:.1f}, Tilt={current_tilt:.1f}")
+                print(f"Estimated Depth: {estimated_depth:.1f} cm")
                 
                 # Send shoot command to Arduino
                 if arduino is not None:
@@ -355,9 +372,16 @@ while True:
                     # Wait for ACK from Arduino
                     if wait_for_ack(arduino):
                         print("Balloon successfully shot.")
+                        shot_angles.append((current_pan, current_tilt))
+                        
+                        # Return to initial position
+                        print("Returning to initial position...")
+                        current_pan = INIT_PAN
+                        current_tilt = INIT_TILT
+                        send_to_arduino(arduino, INIT_PAN, INIT_TILT)
+                        time.sleep(0.5)  # Give time for the servos to move
                     else:
                         print("Failed to receive ACK. Retrying...")
-                        shot_balloons.pop()  # Remove the balloon from the list if ACK not received
         else:
             # Calculate new pan/tilt angles to center the target
             new_pan, new_tilt = calculate_new_angles(error_x, error_y)

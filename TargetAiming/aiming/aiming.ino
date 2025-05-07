@@ -54,7 +54,7 @@ void shoot() {
       Serial.println("home sweet home");
 
       digitalWrite(dirPin, 1 - reverseDirection);
-      rotateSteps(7.1f * 1000);
+      rotateSteps(6.7f * 1000);
 
       flagHome = 1;
     }
@@ -85,7 +85,7 @@ void setup() {
 
   panServo.write(90);
 
-  tiltServo.write(90);
+  tiltServo.write(180);
 
   //  panServo.write(180);
   //   delay(500);
@@ -95,36 +95,37 @@ void setup() {
 
 void loop() {
   // // Check if data is available on the serial port
-  // if (Serial.available() > 0) {
-  //   // Read the incoming message
-  //   receivedMessage = Serial.readStringUntil('\n');
-  //   receivedMessage.trim();  // Remove any extra whitespace or newline characters
+  if (Serial.available() > 0) {
+    // Read the incoming message
+    receivedMessage = Serial.readStringUntil('\n');
+    receivedMessage.trim();  // Remove any extra whitespace or newline characters
 
-  //   // Check if the message is a "SHOOT" command
-  //   if (receivedMessage == "SHOOT") {
-  //     Serial.println("Shooting...");
-  //     shoot();                // Call the shoot function
-  //     Serial.println("ACK");  // Send acknowledgment back to Python
-  //   } else {
-  //     // Parse pan and tilt angles if the message is not "SHOOT"
-  //     int commaIndex = receivedMessage.indexOf(',');
-  //     if (commaIndex > 0) {
-  //       String panAngleStr = receivedMessage.substring(0, commaIndex);
-  //       String tiltAngleStr = receivedMessage.substring(commaIndex + 1);
+    // Check if the message is a "SHOOT" command
+    if (receivedMessage == "SHOOT") {
+      Serial.println("Shooting...");
+      shoot();                // Call the shoot function
+      Serial.println("ACK");  // Send acknowledgment back to Python
+    } else {
+      // Parse pan and tilt angles if the message is not "SHOOT"
+      int commaIndex = receivedMessage.indexOf(',');
+      if (commaIndex > 0) {
+        String panAngleStr = receivedMessage.substring(0, commaIndex);
+        String tiltAngleStr = receivedMessage.substring(commaIndex + 1);
 
-  //       int panAngle = panAngleStr.toInt();
-  //       int tiltAngle = tiltAngleStr.toInt();
+        int panAngle = panAngleStr.toInt();
+        int tiltAngle = tiltAngleStr.toInt();
 
-  //       // Update servo positions
-  //       currentPan = panAngle;
-  //       currentTilt = tiltAngle;
+        // Update servo positions
+        currentPan = panAngle;
+        currentTilt = tiltAngle;
 
-  //       panServo.write(currentPan);
-  //       tiltServo.write(currentTilt);
+        panServo.write(currentPan);
+        tiltServo.write(currentTilt);
 
-  //       Serial.println("Aiming updated.");
-  //     }
-  //   }
-  // }
-  shoot();
+        Serial.println("Aiming updated.");
+      }
+    }
+  }
+  // shoot();
+  // delay(10000);
 }
