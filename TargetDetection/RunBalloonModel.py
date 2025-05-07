@@ -24,30 +24,13 @@ X_CAMERA_FOV = 86
 # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
-LASER_OFFSET_CM_X = 15
-LASER_OFFSET_CM_Y = 0
+LASER_OFFSET_CM_X = 5
+LASER_OFFSET_CM_Y = 7
 
 depth = 150;
 
 shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
 
-# Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
-def setup_serial():
-    ser = serial.Serial()
-    ser.baudrate = 9600
-    ser.port = 'COM4' 
-    ser.timeout = 2
-    
-    try:
-        ser.open()
-        print("Serial port opened successfully!")
-        return ser
-    except Exception as e:
-        print(f"Error opening serial port: {e}")
-        return None
-
-
-ser = setup_serial()
 # Check if balloon is already shot before
 def is_balloon_already_shot(center_x, center_y, threshold=50):
     for shot_x, shot_y in shot_balloons:
@@ -56,23 +39,32 @@ def is_balloon_already_shot(center_x, center_y, threshold=50):
             return True
     return False
 
+def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
+    if arduino is None:
+        print("Arduino not connected.")
+        return False
+    try:
+        # Send data
+        data_str = f"{pan_angle},{tilt_angle}\n"
+        print(f"Sending to Arduino: {data_str.strip()}")
+        arduino.write(data_str.encode('utf-8'))
+        time.sleep(0.05)  # Allow Arduino to respond
 
-
-def send_to_arduino(pan_angle, tilt_angle):
-    command = f"{pan_angle},{tilt_angle}\n"
-    
-    # Send the command as bytes
-    ser.write(command.encode())
-    
-    # Wait a moment for the ESP to process and respond
-    time.sleep(0.1)
-    
-    # Read the response (if any)
-    response = b''
-    while ser.in_waiting:
-        response += ser.read(1)
-    
-    return response.decode() if response else None
+        
+        # Wait for acknowledgment
+        start_time = time.time()
+        # while time.time() - start_time < timeout:
+        #     if arduino.in_waiting:
+        #         line = arduino.readline().decode('utf-8').strip()
+        #         print("Arduino says:", line)
+        #         if line == "ACK":
+        #             return True
+        #     time.sleep(0.01)  # Small sleep to prevent CPU overuse
+        # print("Timeout waiting for Arduino acknowledgment.")
+        # return False
+    except Exception as e:
+        print(f"Serial communication error: {e}")
+        return False
 
 # Function to calculate pan servo angle
 def calculate_pan_angle(target_x, image_width, cam_fov):
@@ -153,6 +145,14 @@ def get_color_name(bgr):
 model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # --- Arduino Serial Setup ---
+# Change 'COM3' to your Arduino's port (check Arduino IDE > Tools > Port)
+try:
+    arduino = serial.Serial('COM4', 9600, timeout=1)
+    time.sleep(2)  # Wait for the connection to establish
+    print("Arduino connected successfully.")
+except Exception as e:
+    print(f"Could not open serial port: {e}")
+    arduino = None
 
 class VideoStream:
     def __init__(self, src):
@@ -180,10 +180,8 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream using the threaded VideoStream
-ip_camera_url = 'http://192.168.55.152:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
-send_to_arduino(90,90)
-# time.sleep(10)
 
 while True:
     ret, frame = cap.read()
@@ -250,9 +248,9 @@ while True:
             if color_name != TARGET_COLOR:
                 continue
             
-            if is_balloon_already_shot(center_x, center_y):
-                print(f"Skipping balloon at ({center_x}, {center_y}): Already shot.")
-                continue
+            # if is_balloon_already_shot(center_x, center_y):
+            #     print(f"Skipping balloon at ({center_x}, {center_y}): Already shot.")
+            #     continue
 
             shot_balloons.append((center_x, center_y))    # Should be add when arduino acknowledge shooting
             print("Shoot it!")
@@ -277,7 +275,7 @@ while True:
 
 
             # --- Send data to Arduino ---
-            send_to_arduino(pan_angle,tilt_angle)
+            send_to_arduino(arduino,pan_angle,tilt_angle,50000)
 
             # Prepare text info including label, color, confidence, and position
 

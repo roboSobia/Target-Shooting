@@ -74,12 +74,17 @@ void setup() {
   pinMode(stepPin, OUTPUT);
   pinMode(switchPin, INPUT_PULLUP);
 
-  panServo.attach(7,500, 2500);  // Attaches the servo on pin 9 to the servo object
-  tiltServo.attach(6);
+  panServo.attach(6,500, 2500);  // Attaches the servo on pin 9 to the servo object
+  tiltServo.attach(7);
 
   panServo.write(90);
 
   tiltServo.write(90);
+
+  //  panServo.write(180);
+  //   delay(500);
+  //   panServo.write(0);
+  //   delay(500);
 }
 
 void loop() {
@@ -98,13 +103,12 @@ void loop() {
     panServo.write(panAngle);
 
     tiltServo.write(tiltAngle);
-    delay(20000);
-    shoot();
-    Serial.println("ACK");
-    delay(30000);
+    //delay(20000);
+    // shoot();
+    // Serial.println("ACK");
+    //delay(30000);
   }
-    panServo.write(90);
-    tiltServo.write(90);
+   
     
 
     
