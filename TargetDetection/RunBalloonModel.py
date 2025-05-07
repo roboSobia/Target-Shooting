@@ -33,7 +33,7 @@ shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
 
 # Check if balloon is already shot before
 def is_balloon_already_shot(center_x, center_y, threshold=50):
-    for shot_x, shot_y in shot_balloons:
+    for shot_x, shot_y in shot_balloons:    
         distance = math.sqrt((center_x - shot_x) ** 2 + (center_y - shot_y) ** 2)
         if distance < threshold:
             return True
@@ -53,15 +53,15 @@ def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
         
         # Wait for acknowledgment
         start_time = time.time()
-        # while time.time() - start_time < timeout:
-        #     if arduino.in_waiting:
-        #         line = arduino.readline().decode('utf-8').strip()
-        #         print("Arduino says:", line)
-        #         if line == "ACK":
-        #             return True
-        #     time.sleep(0.01)  # Small sleep to prevent CPU overuse
-        # print("Timeout waiting for Arduino acknowledgment.")
-        # return False
+        while time.time() - start_time < timeout:
+            if arduino.in_waiting:
+                line = arduino.readline().decode('utf-8').strip()
+                print("Arduino says:", line)
+                if line == "ACK":
+                    return True
+            time.sleep(0.01)  # Small sleep to prevent CPU overuse
+        print("Timeout waiting for Arduino acknowledgment.")
+        return False
     except Exception as e:
         print(f"Serial communication error: {e}")
         return False
