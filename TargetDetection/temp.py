@@ -9,11 +9,11 @@ import webcolors
 from scipy.spatial import KDTree
 
 # Set prediction confidence threshold (adjust as needed)
-CONF_THRESHOLD = 0.5
+CONF_THRESHOLD = 0.7
 
 # Depth estimation parameters
-FOCAL_LENGTH = 670  # in pixels (adjust based on your camera)
-BALLOON_WIDTH = 0.12  # in meters (e.g., 30 cm, adjust based on your balloon size)
+FOCAL_LENGTH = 580  # in pixels (adjust based on your camera)
+BALLOON_WIDTH = 0.18  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
 TARGET_COLOR = "red"    # Target color wanted
 
