@@ -24,7 +24,7 @@ X_CAMERA_FOV = 86  # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
 # Shooter offset from camera (cm)
-LASER_OFFSET_CM_X = 5   # Example: 5cm to the right of the camera
+LASER_OFFSET_CM_X = 4   # Example: 5cm to the right of the camera
 LASER_OFFSET_CM_Y = 18  # 7cm below the camera
 
 # PID-like control parameters (ADJUST THESE TO TUNE PERFORMANCE)
@@ -201,7 +201,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.137.233:4747/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
@@ -244,11 +244,16 @@ last_movement_time = 0
 MOVEMENT_COOLDOWN = 0.2  # seconds between movements
 send_to_arduino(arduino, 90,90);
 
-# Modify the main loop to include the shoot and ACK logic
+NO_BALLOON_TIMEOUT = 10  # seconds
+last_balloon_detected_time = time.time()
+
 while True:
     ret, frame = cap.read()
     if not ret or frame is None:
         break
+
+    current_time = time.time()
+    balloon_detected = False  # Flag to track if we see any unshot balloons
 
     # Run inference on the current frame
     results = model.predict(source=frame, show=False)
@@ -291,6 +296,18 @@ while True:
             # Calculate the center of the bounding box
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
+
+            # Calculate angles for this balloon position
+            error_x, error_y = calculate_error(center_x, center_y)
+            temp_pan, temp_tilt = calculate_new_angles(error_x, error_y)
+
+            # Skip this balloon if we've already shot at similar angles
+            if is_angle_already_shot(temp_pan, temp_tilt):
+                continue
+
+            # If we get here, we've found an unshot balloon
+            balloon_detected = True
+            last_balloon_detected_time = current_time
 
             # Calculate pixel width of the balloon
             pixel_width = x2 - x1
@@ -338,6 +355,11 @@ while True:
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, info_text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    # Check for timeout
+    if current_time - last_balloon_detected_time > NO_BALLOON_TIMEOUT:
+        print(f"No unshot balloons detected for {NO_BALLOON_TIMEOUT} seconds. Terminating...")
+        break
 
     # If we found a target balloon, track it
     current_time = time.time()

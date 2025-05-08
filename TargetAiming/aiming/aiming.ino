@@ -85,7 +85,7 @@ void setup() {
 
   panServo.write(90);
 
-  tiltServo.write(180);
+  tiltServo.write(90);
 
   //  panServo.write(180);
   //   delay(500);
@@ -103,7 +103,8 @@ void loop() {
     // Check if the message is a "SHOOT" command
     if (receivedMessage == "SHOOT") {
       Serial.println("Shooting...");
-      shoot();                // Call the shoot function
+      // shoot();                // Call the shoot function
+      delay(5000);
       Serial.println("ACK");  // Send acknowledgment back to Python
     } else {
       // Parse pan and tilt angles if the message is not "SHOOT"
