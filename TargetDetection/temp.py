@@ -24,7 +24,7 @@ X_CAMERA_FOV = 86  # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
 # Shooter offset from camera (cm)
-LASER_OFFSET_CM_X = 5   # Example: 5cm to the right of the camera
+LASER_OFFSET_CM_X = 4   # Example: 5cm to the right of the camera
 LASER_OFFSET_CM_Y = 18  # 7cm below the camera
 
 # PID-like control parameters (ADJUST THESE TO TUNE PERFORMANCE)
@@ -54,6 +54,7 @@ INIT_PAN = 90
 INIT_TILT = 90
 
 def is_angle_already_shot(pan, tilt, threshold=5):
+
     """
     Check if we've already shot at these angles
     threshold: angle difference tolerance in degrees
@@ -244,11 +245,16 @@ last_movement_time = 0
 MOVEMENT_COOLDOWN = 0.2  # seconds between movements
 send_to_arduino(arduino, 90,90);
 
-# Modify the main loop to include the shoot and ACK logic
+NO_BALLOON_TIMEOUT = 10  # seconds
+last_balloon_detected_time = time.time()
+
 while True:
     ret, frame = cap.read()
     if not ret or frame is None:
         break
+
+    current_time = time.time()
+    balloon_detected = False  # Flag to track if we see any unshot balloons
 
     # Run inference on the current frame
     results = model.predict(source=frame, show=False)
@@ -291,6 +297,22 @@ while True:
             # Calculate the center of the bounding box
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
+
+            # Calculate angles for this balloon position BEFORE any movement
+            error_x, error_y = calculate_error(center_x, center_y)
+            target_pan, target_tilt = calculate_new_angles(error_x, error_y)
+
+            # Skip this balloon immediately if we've already shot at similar angles
+            if is_angle_already_shot(target_pan, target_tilt, threshold=15):
+                # Draw red box around ignored balloon
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, "Already Shot", (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                continue
+
+            # If we get here, we've found an unshot balloon
+            balloon_detected = True
+            last_balloon_detected_time = current_time
 
             # Calculate pixel width of the balloon
             pixel_width = x2 - x1
@@ -344,6 +366,11 @@ while True:
             cv2.putText(frame, info_text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
+    # Check for timeout
+    if current_time - last_balloon_detected_time > NO_BALLOON_TIMEOUT:
+        print(f"No unshot balloons detected for {NO_BALLOON_TIMEOUT} seconds. Terminating...")
+        break
+
     # If we found a target balloon, track it
     current_time = time.time()
     if target_found and (current_time - last_movement_time) > MOVEMENT_COOLDOWN:
@@ -384,7 +411,12 @@ while True:
                         current_pan = INIT_PAN
                         current_tilt = INIT_TILT
                         send_to_arduino(arduino, INIT_PAN, INIT_TILT)
-                        time.sleep(0.5)  # Give time for the servos to move
+                        time.sleep(RETURN_TO_CENTER_DELAY)  # Give time for the servos to move and system to stabilize
+                        
+                        # Reset the balloon detection timeout after movement
+                        last_balloon_detected_time = time.time()
+                        balloon_detected = False
+                        
                     else:
                         print("Failed to receive ACK. Retrying...")
         else:
