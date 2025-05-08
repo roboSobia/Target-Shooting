@@ -53,6 +53,9 @@ shot_angles = []  # Stores (pan, tilt) tuples of previously shot positions
 INIT_PAN = 90
 INIT_TILT = 90
 
+# Add this constant at the top
+RETURN_TO_CENTER_DELAY = 1.0  # seconds to wait after returning to center
+
 def is_angle_already_shot(pan, tilt, threshold=10):
     """
     Check if we've already shot at these angles
@@ -297,12 +300,16 @@ while True:
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
-            # Calculate angles for this balloon position
+            # Calculate angles for this balloon position BEFORE any movement
             error_x, error_y = calculate_error(center_x, center_y)
-            temp_pan, temp_tilt = calculate_new_angles(error_x, error_y)
+            target_pan, target_tilt = calculate_new_angles(error_x, error_y)
 
-            # Skip this balloon if we've already shot at similar angles
-            if is_angle_already_shot(temp_pan, temp_tilt):
+            # Skip this balloon immediately if we've already shot at similar angles
+            if is_angle_already_shot(target_pan, target_tilt, threshold=15):
+                # Draw red box around ignored balloon
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, "Already Shot", (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 continue
 
             # If we get here, we've found an unshot balloon
@@ -401,7 +408,12 @@ while True:
                         current_pan = INIT_PAN
                         current_tilt = INIT_TILT
                         send_to_arduino(arduino, INIT_PAN, INIT_TILT)
-                        time.sleep(0.5)  # Give time for the servos to move
+                        time.sleep(RETURN_TO_CENTER_DELAY)  # Give time for the servos to move and system to stabilize
+                        
+                        # Reset the balloon detection timeout after movement
+                        last_balloon_detected_time = time.time()
+                        balloon_detected = False
+                        
                     else:
                         print("Failed to receive ACK. Retrying...")
         else:
