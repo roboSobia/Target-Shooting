@@ -103,8 +103,8 @@ void loop() {
     // Check if the message is a "SHOOT" command
     if (receivedMessage == "SHOOT") {
       Serial.println("Shooting...");
-      // shoot();                // Call the shoot function
-      delay(5000);
+      shoot();                // Call the shoot function
+      delay(500);
       Serial.println("ACK");  // Send acknowledgment back to Python
     } else {
       // Parse pan and tilt angles if the message is not "SHOOT"
