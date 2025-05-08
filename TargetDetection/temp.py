@@ -15,7 +15,7 @@ CONF_THRESHOLD = 0.7
 FOCAL_LENGTH = 580  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.18  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "red"    # Target color wanted
+TARGET_COLOR = "yellow"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
@@ -53,7 +53,7 @@ shot_angles = []  # Stores (pan, tilt) tuples of previously shot positions
 INIT_PAN = 90
 INIT_TILT = 90
 
-def is_angle_already_shot(pan, tilt, threshold=10):
+def is_angle_already_shot(pan, tilt, threshold=5):
     """
     Check if we've already shot at these angles
     threshold: angle difference tolerance in degrees
@@ -143,11 +143,11 @@ def get_color_name(bgr):
     # Convert BGR to RGB for easier interpretation
     r, g, b = bgr[2], bgr[1], bgr[0]
     # Simple heuristic to determine the color name
-    if r > 150 and g > 70 and g<120 and b > 70 and b<120:
+    if r > 150 and g > 70 and g<150 and b > 70 and b<150:
         return "red"
-    elif r > 140 and g > 150 and b < 150 and b<200:
+    elif r < 140 and g > 150 and b < 170:
         return "green"
-    elif r < 100 and g < 160 and b > 170:
+    elif r < 175 and g < 175 and b > 150:
         return "blue"
     elif r > 160 and g > 140 and  b < 100:
         return "yellow"
@@ -201,7 +201,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.137.233:4747/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
@@ -311,6 +311,11 @@ while True:
             # Compute the average BGR color in the ROI
             mean_color = [int(round(x)) for x in cv2.mean(roi)[:3]]
             color_name = get_color_name(mean_color)
+
+            print(color_name)
+
+            if(color_name != TARGET_COLOR):
+                continue
 
             # Prepare text info
             info_text = f"{label} ({color_name}) {confs[i]:.2f} Pos: ({center_x}, {center_y}) D:{estimated_depth:.1f}cm"

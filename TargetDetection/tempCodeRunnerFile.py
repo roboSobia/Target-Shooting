@@ -1,1 +1,1 @@
-shoot
+yellow
