@@ -267,7 +267,7 @@ while True:
     best_confidence = 0
 
     # Check if we are at the initial position
-    if abs(current_pan - INIT_PAN) < 0.5 and abs(current_tilt - INIT_TILT) < 0.5:
+    if abs(current_pan - INIT_PAN) < 1 and abs(current_tilt - INIT_TILT) < 1:  # TODO:: Change Threshold
         is_at_initial_position = True
     else:
         is_at_initial_position = False
@@ -400,7 +400,7 @@ while True:
                     if current_target_initial_coords is not None:
                         shot_balloons.append(current_target_initial_coords)
                         print(f"Stored initial coords: {current_target_initial_coords}")
-                    shot_angles.append((current_pan, current_tilt))
+                    # shot_angles.append((current_pan, current_tilt))
                     
                     # Reset initial coords for the next target
                     current_target_initial_coords = None
