@@ -44,7 +44,7 @@ MAX_ANGLE_CHANGE = 5
 
 depth = 150  # Initial depth estimate in cm
 
-shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
+shot_balloons = []  # Stores (x, y) tuples of previously shot balloons at initial position
 
 # Modify the global variable to store angles instead of coordinates
 shot_angles = []  # Stores (pan, tilt) tuples of previously shot positions
@@ -64,7 +64,7 @@ def is_angle_already_shot(pan, tilt, threshold=5):
             return True
     return False
 
-# Check if balloon is already shot before
+# Check if balloon is already shot before (based on initial position coordinates)
 def is_balloon_already_shot(center_x, center_y, threshold=50):
     for shot_x, shot_y in shot_balloons:
         distance = math.sqrt((center_x - shot_x) ** 2 + (center_y - shot_y) ** 2)
@@ -88,7 +88,7 @@ def send_to_arduino(arduino, pan_angle, tilt_angle, timeout=50000):
         return False
 
 # Add a function to wait for an "ACK" message from the Arduino
-def wait_for_ack(arduino, timeout=40):
+def wait_for_ack(arduino, timeout=10):
     """Wait for an ACK message from the Arduino."""
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -168,7 +168,7 @@ model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # Arduino Serial Setup
 try:
-    arduino = serial.Serial('COM8', 9600, timeout=1)
+    arduino = serial.Serial('COM7', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -201,7 +201,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.152:8080/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
@@ -242,9 +242,13 @@ def draw_crosshair(frame, color=(0, 0, 255), size=20, thickness=2):
 # Time tracking for movement cooldown
 last_movement_time = 0
 MOVEMENT_COOLDOWN = 0.2  # seconds between movements
-send_to_arduino(arduino, 90,90);
+send_to_arduino(arduino, 90, 90)
 
-# Modify the main loop to include the shoot and ACK logic
+# Variable to store the initial coordinates of the current target balloon
+current_target_initial_coords = None
+is_at_initial_position = True  # Track if servos are at initial position
+
+# Main loop
 while True:
     ret, frame = cap.read()
     if not ret or frame is None:
@@ -261,6 +265,12 @@ while True:
     target_found = False
     best_target = None
     best_confidence = 0
+
+    # Check if we are at the initial position
+    if abs(current_pan - INIT_PAN) < 0.5 and abs(current_tilt - INIT_TILT) < 0.5:
+        is_at_initial_position = True
+    else:
+        is_at_initial_position = False
 
     # Process each result
     for result in results:
@@ -292,6 +302,11 @@ while True:
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
+            # Check if this balloon was already shot (only when at initial position)
+            if is_at_initial_position and is_balloon_already_shot(center_x, center_y):
+                print(f"Skipping balloon at ({center_x}, {center_y}) - already shot")
+                continue
+
             # Calculate pixel width of the balloon
             pixel_width = x2 - x1
 
@@ -312,9 +327,7 @@ while True:
             mean_color = [int(round(x)) for x in cv2.mean(roi)[:3]]
             color_name = get_color_name(mean_color)
 
-            print(color_name)
-
-            if(color_name != TARGET_COLOR):
+            if color_name != TARGET_COLOR:
                 continue
 
             # Prepare text info
@@ -326,7 +339,8 @@ while True:
                 'color': color_name,
                 'conf': confs[i],
                 'pos': (center_x, center_y),
-                'depth': estimated_depth
+                'depth': estimated_depth,
+                'initial_coords': (center_x, center_y) if is_at_initial_position else None
             })
             
             # Draw the bounding box
@@ -336,7 +350,8 @@ while True:
                 best_target = {
                     'pos': (center_x, center_y),
                     'box': (x1, y1, x2, y2),
-                    'info': info_text
+                    'info': info_text,
+                    'initial_coords': (center_x, center_y) if is_at_initial_position else current_target_initial_coords
                 }
                 target_found = True
             
@@ -350,6 +365,10 @@ while True:
         last_movement_time = current_time
         
         center_x, center_y = best_target['pos']
+        
+        # Store initial coordinates when selecting a new target at initial position
+        if is_at_initial_position:
+            current_target_initial_coords = best_target['initial_coords']
         
         # Calculate error from center
         error_x, error_y = calculate_error(center_x, center_y)
@@ -375,18 +394,25 @@ while True:
                     print("Shoot command sent to Arduino.")
                     
                     # Wait for ACK from Arduino
-                    if wait_for_ack(arduino):
-                        print("Balloon successfully shot.")
-                        shot_angles.append((current_pan, current_tilt))
-                        
-                        # Return to initial position
-                        print("Returning to initial position...")
-                        current_pan = INIT_PAN
-                        current_tilt = INIT_TILT
-                        send_to_arduino(arduino, INIT_PAN, INIT_TILT)
-                        time.sleep(0.5)  # Give time for the servos to move
-                    else:
-                        print("Failed to receive ACK. Retrying...")
+                    wait_for_ack(arduino)
+                    print("Balloon successfully shot.")
+                    # Store the balloon's initial position coordinates and angles
+                    if current_target_initial_coords is not None:
+                        shot_balloons.append(current_target_initial_coords)
+                        print(f"Stored initial coords: {current_target_initial_coords}")
+                    shot_angles.append((current_pan, current_tilt))
+                    
+                    # Reset initial coords for the next target
+                    current_target_initial_coords = None
+                    
+                    # Return to initial position
+                    print("Returning to initial position...")
+                    current_pan = INIT_PAN
+                    current_tilt = INIT_TILT
+                    send_to_arduino(arduino, INIT_PAN, INIT_TILT)
+                    time.sleep(0.5)  # Give time for the servos to move
+                    # else:
+                    #     print("Failed to receive ACK. Retrying...")
         else:
             # Calculate new pan/tilt angles to center the target
             new_pan, new_tilt = calculate_new_angles(error_x, error_y)
@@ -407,7 +433,7 @@ while True:
                             (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
     # Display current servo positions and control parameters
-    cv2.putText(frame, f"Pan: {int(current_pan)} Tilt: {int(current_tilt)}", 
+    cv2.putText(frame, f"Pan: {int(current_pan)} Tilt={int(current_tilt)}", 
                 (10, IMAGE_HEIGHT - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
     cv2.putText(frame, f"Kp_X: {KP_X:.3f} Kp_Y: {KP_Y:.3f}", 
                 (10, IMAGE_HEIGHT - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
