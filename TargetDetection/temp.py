@@ -15,7 +15,7 @@ CONF_THRESHOLD = 0.7
 FOCAL_LENGTH = 580  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.18  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "yellow"    # Target color wanted
+TARGET_COLOR = "red"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
@@ -168,7 +168,7 @@ model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # Arduino Serial Setup
 try:
-    arduino = serial.Serial('COM7', 9600, timeout=1)
+    arduino = serial.Serial('COM3', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -201,7 +201,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.55.152:8080/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.137.68:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
