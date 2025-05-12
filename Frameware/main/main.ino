@@ -85,7 +85,7 @@ void loop() {
   // // Check if data is available on the serial port
   if (Serial.available() > 0) {
     // Read the incoming message
-    (receivedMessage = Serial.readStringUntil('\n');
+    receivedMessage = Serial.readStringUntil('\n');
     receivedMessage.trim();  // Remove any extra whitespace or newline characters
 
     // Check if the message is a "SHOOT" command

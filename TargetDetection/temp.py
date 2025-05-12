@@ -15,7 +15,7 @@ CONF_THRESHOLD = 0.7
 FOCAL_LENGTH = 580  # in pixels (adjust based on your camera)
 BALLOON_WIDTH = 0.18  # in meters (e.g., 30 cm, adjust based on your balloon size)
 
-TARGET_COLOR = "red"    # Target color wanted
+target_color = "red"    # Target color wanted
 
 IMAGE_WIDTH = 640 
 IMAGE_HEIGHT = 480
@@ -24,7 +24,7 @@ X_CAMERA_FOV = 86  # in degrees
 Y_CAMERA_FOV = 53  # in degrees
 
 # Shooter offset from camera (cm)
-LASER_OFFSET_CM_X = 5   # Example: 5cm to the right of the camera
+LASER_OFFSET_CM_X = 4   # Example: 5cm to the right of the camera
 LASER_OFFSET_CM_Y = 18  # 7cm below the camera
 
 # PID-like control parameters (ADJUST THESE TO TUNE PERFORMANCE)
@@ -44,7 +44,7 @@ MAX_ANGLE_CHANGE = 5
 
 depth = 150  # Initial depth estimate in cm
 
-shot_balloons = []  # Stores (x, y) tuples of previously shot balloons at initial position
+shot_balloons = []  # Stores (x, y) tuples of previously shot balloons
 
 # Modify the global variable to store angles instead of coordinates
 shot_angles = []  # Stores (pan, tilt) tuples of previously shot positions
@@ -54,6 +54,7 @@ INIT_PAN = 90
 INIT_TILT = 90
 
 def is_angle_already_shot(pan, tilt, threshold=5):
+
     """
     Check if we've already shot at these angles
     threshold: angle difference tolerance in degrees
@@ -64,7 +65,7 @@ def is_angle_already_shot(pan, tilt, threshold=5):
             return True
     return False
 
-# Check if balloon is already shot before (based on initial position coordinates)
+# Check if balloon is already shot before
 def is_balloon_already_shot(center_x, center_y, threshold=50):
     for shot_x, shot_y in shot_balloons:
         distance = math.sqrt((center_x - shot_x) ** 2 + (center_y - shot_y) ** 2)
@@ -168,7 +169,7 @@ model = YOLO(r'TargetDetection\\runs\detect\\train\weights\best.pt')
 
 # Arduino Serial Setup
 try:
-    arduino = serial.Serial('COM3', 9600, timeout=1)
+    arduino = serial.Serial('COM8', 9600, timeout=1)
     time.sleep(2)  # Wait for the connection to establish
     print("Arduino connected successfully.")
 except Exception as e:
@@ -201,7 +202,7 @@ class VideoStream:
         self.cap.release()
 
 # Open the IP camera stream
-ip_camera_url = 'http://192.168.137.68:4747/video'  # Example for IP Webcam app
+ip_camera_url = 'http://192.168.55.215:4747/video'  # Example for IP Webcam app
 cap = VideoStream(ip_camera_url)
 
 # Draw crosshair in the center of the frame
@@ -242,17 +243,20 @@ def draw_crosshair(frame, color=(0, 0, 255), size=20, thickness=2):
 # Time tracking for movement cooldown
 last_movement_time = 0
 MOVEMENT_COOLDOWN = 0.2  # seconds between movements
-send_to_arduino(arduino, 90, 90)
+send_to_arduino(arduino, 90,90);
 
-# Variable to store the initial coordinates of the current target balloon
-current_target_initial_coords = None
-is_at_initial_position = True  # Track if servos are at initial position
+NO_BALLOON_TIMEOUT = 10  # seconds
+last_balloon_detected_time = time.time()
 
-# Main loop
+target_color = input("Enter Next color: ")
+
 while True:
     ret, frame = cap.read()
     if not ret or frame is None:
         break
+
+    current_time = time.time()
+    balloon_detected = False  # Flag to track if we see any unshot balloons
 
     # Run inference on the current frame
     results = model.predict(source=frame, show=False)
@@ -265,12 +269,6 @@ while True:
     target_found = False
     best_target = None
     best_confidence = 0
-
-    # Check if we are at the initial position
-    if abs(current_pan - INIT_PAN) < 1 and abs(current_tilt - INIT_TILT) < 1:  # TODO:: Change Threshold
-        is_at_initial_position = True
-    else:
-        is_at_initial_position = False
 
     # Process each result
     for result in results:
@@ -302,10 +300,21 @@ while True:
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
-            # Check if this balloon was already shot (only when at initial position)
-            if is_at_initial_position and is_balloon_already_shot(center_x, center_y):
-                print(f"Skipping balloon at ({center_x}, {center_y}) - already shot")
+            # Calculate angles for this balloon position BEFORE any movement
+            error_x, error_y = calculate_error(center_x, center_y)
+            target_pan, target_tilt = calculate_new_angles(error_x, error_y)
+
+            # Skip this balloon immediately if we've already shot at similar angles
+            if is_angle_already_shot(target_pan, target_tilt, threshold=15):
+                # Draw red box around ignored balloon
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, "Already Shot", (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 continue
+
+            # If we get here, we've found an unshot balloon
+            balloon_detected = True
+            last_balloon_detected_time = current_time
 
             # Calculate pixel width of the balloon
             pixel_width = x2 - x1
@@ -327,7 +336,9 @@ while True:
             mean_color = [int(round(x)) for x in cv2.mean(roi)[:3]]
             color_name = get_color_name(mean_color)
 
-            if color_name != TARGET_COLOR:
+            print(color_name)
+
+            if(color_name != target_color):
                 continue
 
             # Prepare text info
@@ -339,8 +350,7 @@ while True:
                 'color': color_name,
                 'conf': confs[i],
                 'pos': (center_x, center_y),
-                'depth': estimated_depth,
-                'initial_coords': (center_x, center_y) if is_at_initial_position else None
+                'depth': estimated_depth
             })
             
             # Draw the bounding box
@@ -350,8 +360,7 @@ while True:
                 best_target = {
                     'pos': (center_x, center_y),
                     'box': (x1, y1, x2, y2),
-                    'info': info_text,
-                    'initial_coords': (center_x, center_y) if is_at_initial_position else current_target_initial_coords
+                    'info': info_text
                 }
                 target_found = True
             
@@ -359,16 +368,17 @@ while True:
             cv2.putText(frame, info_text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
+    # Check for timeout
+    if current_time - last_balloon_detected_time > NO_BALLOON_TIMEOUT:
+        print(f"No unshot balloons detected for {NO_BALLOON_TIMEOUT} seconds. Terminating...")
+        break
+
     # If we found a target balloon, track it
     current_time = time.time()
     if target_found and (current_time - last_movement_time) > MOVEMENT_COOLDOWN:
         last_movement_time = current_time
         
         center_x, center_y = best_target['pos']
-        
-        # Store initial coordinates when selecting a new target at initial position
-        if is_at_initial_position:
-            current_target_initial_coords = best_target['initial_coords']
         
         # Calculate error from center
         error_x, error_y = calculate_error(center_x, center_y)
@@ -394,25 +404,23 @@ while True:
                     print("Shoot command sent to Arduino.")
                     
                     # Wait for ACK from Arduino
-                    wait_for_ack(arduino)
-                    print("Balloon successfully shot.")
-                    # Store the balloon's initial position coordinates and angles
-                    if current_target_initial_coords is not None:
-                        shot_balloons.append(current_target_initial_coords)
-                        print(f"Stored initial coords: {current_target_initial_coords}")
-                    # shot_angles.append((current_pan, current_tilt))
-                    
-                    # Reset initial coords for the next target
-                    current_target_initial_coords = None
-                    
-                    # Return to initial position
-                    print("Returning to initial position...")
-                    current_pan = INIT_PAN
-                    current_tilt = INIT_TILT
-                    send_to_arduino(arduino, INIT_PAN, INIT_TILT)
-                    time.sleep(0.5)  # Give time for the servos to move
-                    # else:
-                    #     print("Failed to receive ACK. Retrying...")
+                    if wait_for_ack(arduino):
+                        print("Balloon successfully shot.")
+                        shot_angles.append((current_pan, current_tilt))
+                        
+                        # Return to initial position
+                        print("Returning to initial position...")
+                        current_pan = INIT_PAN
+                        current_tilt = INIT_TILT
+                        send_to_arduino(arduino, INIT_PAN, INIT_TILT)
+                        time.sleep(RETURN_TO_CENTER_DELAY)  # Give time for the servos to move and system to stabilize
+                        
+                        # Reset the balloon detection timeout after movement
+                        last_balloon_detected_time = time.time()
+                        balloon_detected = False
+                        
+                    else:
+                        print("Failed to receive ACK. Retrying...")
         else:
             # Calculate new pan/tilt angles to center the target
             new_pan, new_tilt = calculate_new_angles(error_x, error_y)
@@ -433,7 +441,7 @@ while True:
                             (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
     # Display current servo positions and control parameters
-    cv2.putText(frame, f"Pan: {int(current_pan)} Tilt={int(current_tilt)}", 
+    cv2.putText(frame, f"Pan: {int(current_pan)} Tilt: {int(current_tilt)}", 
                 (10, IMAGE_HEIGHT - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
     cv2.putText(frame, f"Kp_X: {KP_X:.3f} Kp_Y: {KP_Y:.3f}", 
                 (10, IMAGE_HEIGHT - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)

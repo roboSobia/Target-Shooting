@@ -5,9 +5,9 @@ float panAngle;
 float tiltAngle;
 
 // Define pin connections
-const int stepPin = 13;  // Pin connected to STEP pin of driver
-const int dirPin = 12;   // Pin connected to DIR pin of driver
-const int switchPin = 23;
+const int stepPin = 2;  // Pin connected to STEP pin of driver
+const int dirPin = 15;   // Pin connected to DIR pin of driver
+const int switchPin = 26;
 
 int total_steps = 0;
 int flagHome = 0;
@@ -54,7 +54,7 @@ void shoot() {
       Serial.println("home sweet home");
 
       digitalWrite(dirPin, 1 - reverseDirection);
-      rotateSteps(6.8f * 1000);
+      rotateSteps(6.7f * 1000);
 
       flagHome = 1;
     }
@@ -80,8 +80,8 @@ void setup() {
   pinMode(stepPin, OUTPUT);
   pinMode(switchPin, INPUT_PULLUP);
 
-  panServo.attach(26, 500, 2500);  // Attaches the servo on pin 9 to the servo object
-  tiltServo.attach(14);
+  panServo.attach(13, 500, 2500);  // Attaches the servo on pin 9 to the servo object
+  tiltServo.attach(12);
 
   panServo.write(90);
 
